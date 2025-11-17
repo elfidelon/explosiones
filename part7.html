@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Explosion SpriteSheet - Phaser</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script>
+
+        var config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: { gravity: { y: 300 }, debug: false }
+            },
+            scene: { preload, create, update }
+        };
+
+        new Phaser.Game(config);
+
+        var player, bombs, platforms, cursors;
+
+        function preload() {
+
+            this.load.image('sky', 'assets/sky.png');
+            this.load.image('ground', 'assets/platform.png');
+            this.load.image('bomb', 'assets/bomb.png');
+
+            // ⭐ TU SPRITESHEET REAL: 1024x1024 px SIN ACENTO
+            this.load.spritesheet('explosion', 'assets/explosion.png', {
+                frameWidth: 256,
+                frameHeight: 256
+            });
+
+            this.load.spritesheet('dude', 'assets/dude.png', {
+                frameWidth: 32,
+                frameHeight: 48
+            });
+        }
+
+        function create() {
+
+            this.add.image(400, 300, 'sky');
+
+            // Plataformas
+            platforms = this.physics.add.staticGroup();
+            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+
+            // Jugador
+            player = this.physics.add.sprite(100, 450, 'dude');
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+
+            // Animaciones del jugador
+            this.anims.create({
+                key: 'left',
+                frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
+                frameRate: 10, repeat: -1
+            });
+
+            this.anims.create({
+                key: 'turn',
+                frames: [{ key: 'dude', frame: 4 }],
+                frameRate: 20
+            });
+
+            this.anims.create({
+                key: 'right',
+                frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }),
+                frameRate: 10, repeat: -1
+            });
+
+            cursors = this.input.keyboard.createCursorKeys();
+
+            // Bombas
+            bombs = this.physics.add.group({
+                bounceY: 0.3,
+                collideWorldBounds: true
+            });
+
+            this.time.addEvent({
+                delay: 900,
+                callback: () => {
+                    let x = Phaser.Math.Between(50, 750);
+                    bombs.create(x, -20, 'bomb');
+                },
+                loop: true
+            });
+
+            // ⭐ Animación de 16 frames
+            this.anims.create({
+                key: 'boom',
+                frames: this.anims.generateFrameNumbers('explosion', { start: 0, end: 15 }),
+                frameRate: 20,
+                repeat: 0
+            });
+
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(bombs, platforms, detonar, null, this);
+            this.physics.add.collider(bombs, player, detonar, null, this);
+        }
+
+        function update() {
+
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.anims.play('left', true);
+            }
+            else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.anims.play('right', true);
+            }
+            else {
+                player.setVelocityX(0);
+                player.anims.play('turn');
+            }
+
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-330);
+            }
+        }
+
+        // ⭐ FUNCIÓN FINAL DE EXPLOSIÓN
+        function detonar(bomb) {
+
+            let scene = bomb.scene;
+            let x = bomb.x;
+            let y = bomb.y;
+
+            bomb.body.enable = false;
+            bomb.setVisible(false);
+
+            // Crear sprite de explosión en esa posición
+            let boom = scene.add.sprite(x, y, 'explosion');
+            boom.setScale(1.5); // puedes aumentar o reducir tamaño
+
+            boom.play('boom');
+
+            boom.on('animationcomplete', () => {
+                boom.destroy();
+                bomb.destroy();
+            });
+        }
+
+    </script>
+
+</body>
+
+</html>
