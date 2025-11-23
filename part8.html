@@ -1,143 +1,189 @@
-<!doctype html> 
-<html lang="en"> 
-<head> 
-    <meta charset="UTF-8" />
-    <title>Making your first Phaser 3 Game - Part 8</title>
-    <script src="//cdn.jsdelivr.net/npm/phaser@3.11.0/dist/phaser.js"></script>
-    <style type="text/css">
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>[3er Parcial] Doble salto, bombas y puntos</title>
+
+    <!-- Phaser CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+
+    <style>
         body {
             margin: 0;
+            padding: 0;
+        }
+
+        canvas {
+            display: block;
+            margin: auto;
         }
     </style>
 </head>
+
 <body>
+    <script>
 
-<script type="text/javascript">
+        var score = 0;
+        var scoreText;
+        var highScore = parseInt(localStorage.getItem('highScore')) || 0;
+        var highScoreText;
+        var bombs;
 
-    var config = {
-        type: Phaser.AUTO,
-        width: 800,
-        height: 600,
-        physics: {
-            default: 'arcade',
-            arcade: {
-                gravity: { y: 300 },
-                debug: false
+        var config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: { gravity: { y: 300 }, debug: false }
+            },
+            scene: { preload, create, update }
+        };
+
+        var player, stars, platforms, cursors;
+        var game = new Phaser.Game(config);
+
+        function preload() {
+            this.load.image('sky', 'assets/sky.png');
+            this.load.image('ground', 'assets/platform.png');
+            this.load.image('star', 'assets/star.png');
+            this.load.image('bomb', 'assets/bomb.png');
+
+            // 💥 SPRITESHEET DE EXPLOSIÓN
+            this.load.spritesheet('explosion', 'assets/explosion.png', {
+                frameWidth: 256,
+                frameHeight: 256
+            });
+
+            this.load.spritesheet('dude', 'assets/dude.png', {
+                frameWidth: 32,
+                frameHeight: 48
+            });
+        }
+
+        function create() {
+            score = 0;
+
+            this.add.image(400, 300, 'sky');
+
+            platforms = this.physics.add.staticGroup();
+            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+            platforms.create(600, 400, 'ground');
+            platforms.create(50, 250, 'ground');
+            platforms.create(750, 220, 'ground');
+
+            player = this.physics.add.sprite(100, 450, 'dude');
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+
+            // Animaciones del jugador
+            this.anims.create({ key: 'left', frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+            this.anims.create({ key: 'turn', frames: [{ key: 'dude', frame: 4 }], frameRate: 20 });
+            this.anims.create({ key: 'right', frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }), frameRate: 10, repeat: -1 });
+
+            cursors = this.input.keyboard.createCursorKeys();
+
+            stars = this.physics.add.group({
+                key: 'star',
+                repeat: 11,
+                setXY: { x: 12, y: 0, stepX: 70 }
+            });
+
+            stars.children.iterate(c => c.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8)));
+
+            bombs = this.physics.add.group();
+
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(stars, platforms);
+            this.physics.add.collider(bombs, platforms);
+
+            this.physics.add.overlap(player, stars, collectStar, null, this);
+            this.physics.add.collider(player, bombs, hitBomb, null, this);
+
+            // 💥 ANIMACIÓN DE EXPLOSIÓN
+            this.anims.create({
+                key: 'boom',
+                frames: this.anims.generateFrameNumbers('explosion', { start: 0, end: 15 }),
+                frameRate: 20,
+                repeat: 0
+            });
+
+            scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#fff' });
+            highScoreText = this.add.text(550, 16, 'High Score: ' + highScore, { fontSize: '28px', fill: '#ffdf00' });
+        }
+
+        // Control para el doble salto
+        var canDoubleJump = false;
+
+        function update() {
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.anims.play('left', true);
             }
-        },
-        scene: {
-            preload: preload,
-            create: create,
-            update: update
-        }
-    };
+            else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.anims.play('right', true);
+            }
+            else {
+                player.setVelocityX(0);
+                player.anims.play('turn');
+            }
 
-    var player;
-    var stars;
-    var platforms;
-    var cursors;
+            // --- DOBLE SALTO ---
+            if (player.body.touching.down) {
+                canDoubleJump = true; // Reset
+            }
 
-    var game = new Phaser.Game(config);
-
-    function preload ()
-    {
-        this.load.image('sky', 'assets/sky.png');
-        this.load.image('ground', 'assets/platform.png');
-        this.load.image('star', 'assets/star.png');
-        this.load.image('bomb', 'assets/bomb.png');
-        this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 32, frameHeight: 48 });
-    }
-
-    function create ()
-    {
-        this.add.image(400, 300, 'sky');
-
-        platforms = this.physics.add.staticGroup();
-
-        platforms.create(400, 568, 'ground').setScale(2).refreshBody();
-
-        platforms.create(600, 400, 'ground');
-        platforms.create(50, 250, 'ground');
-        platforms.create(750, 220, 'ground');
-
-        player = this.physics.add.sprite(100, 450, 'dude');
-
-        player.setBounce(0.2);
-        player.setCollideWorldBounds(true);
-
-        this.anims.create({
-            key: 'left',
-            frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
-            frameRate: 10,
-            repeat: -1
-        });
-
-        this.anims.create({
-            key: 'turn',
-            frames: [ { key: 'dude', frame: 4 } ],
-            frameRate: 20
-        });
-
-        this.anims.create({
-            key: 'right',
-            frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }),
-            frameRate: 10,
-            repeat: -1
-        });
-
-        cursors = this.input.keyboard.createCursorKeys();
-
-        stars = this.physics.add.group({
-            key: 'star',
-            repeat: 11,
-            setXY: { x: 12, y: 0, stepX: 70 }
-        });
-
-        stars.children.iterate(function (child) {
-
-            child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
-
-        });
-
-        this.physics.add.collider(player, platforms);
-        this.physics.add.collider(stars, platforms);
-
-        this.physics.add.overlap(player, stars, collectStar, null, this);
-    }
-
-    function update ()
-    {
-        if (cursors.left.isDown)
-        {
-            player.setVelocityX(-160);
-
-            player.anims.play('left', true);
-        }
-        else if (cursors.right.isDown)
-        {
-            player.setVelocityX(160);
-
-            player.anims.play('right', true);
-        }
-        else
-        {
-            player.setVelocityX(0);
-
-            player.anims.play('turn');
+            if (Phaser.Input.Keyboard.JustDown(cursors.up)) {
+                if (player.body.touching.down) {
+                    player.setVelocityY(-330); // Primer salto
+                } else if (canDoubleJump) {
+                    player.setVelocityY(-330); // Segundo salto
+                    canDoubleJump = false;
+                }
+            }
         }
 
-        if (cursors.up.isDown && player.body.touching.down)
-        {
-            player.setVelocityY(-330);
+        function collectStar(player, star) {
+            star.disableBody(true, true);
+            score += 10;
+            scoreText.setText('Score: ' + score);
+
+            if (stars.countActive(true) === 0) {
+                stars.children.iterate(c => c.enableBody(true, c.x, 0, true, true));
+
+                var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
+                var bomb = bombs.create(x, 16, 'bomb');
+                bomb.setBounce(1);
+                bomb.setCollideWorldBounds(true);
+                bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+            }
         }
-    }
 
-    function collectStar (player, star)
-    {
-        star.disableBody(true, true);
-    }
+        function hitBomb(player, bomb) {
 
-</script>
+            // 💥 CREAR EXPLOSIÓN EN LA BOMBA
+            let boom = this.add.sprite(bomb.x, bomb.y, "explosion").setScale(1.5);
+            boom.play("boom");
+
+            bomb.disableBody(true, true);
+
+            // Guardar High Score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+            }
+
+            this.physics.pause(); // pausa rápido mientras la explosión termina
+
+            boom.on('animationcomplete', () => {
+                this.scene.restart();
+            });
+        }
+
+    </script>
 
 </body>
+
 </html>
